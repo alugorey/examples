@@ -322,8 +322,10 @@ def train(train_loader, model, criterion, optimizer, epoch, device, args):
         target = target.to(device, non_blocking=True)
 
         # compute output
-        output = model(images)
-        loss = criterion(output, target)
+        # add AMP
+        with torch.cuda.amp.autocast():
+            output = model(images)
+            loss = criterion(output, target)
 
         # measure accuracy and record loss
         acc1, acc5 = accuracy(output, target, topk=(1, 5))
@@ -342,6 +344,10 @@ def train(train_loader, model, criterion, optimizer, epoch, device, args):
 
         if i % args.print_freq == 0:
             progress.display(i + 1)
+
+        if i == 5:
+            print("BREAKING OUT OF MAIN TRAIN LOOP")
+            break
 
 
 def validate(val_loader, model, criterion, args):
@@ -375,6 +381,10 @@ def validate(val_loader, model, criterion, args):
 
                 if i % args.print_freq == 0:
                     progress.display(i + 1)
+
+                if i == 1:
+                    print("BREAKING OUT OF VALIDATION LOOP")
+                    break
 
     batch_time = AverageMeter('Time', ':6.3f', Summary.NONE)
     losses = AverageMeter('Loss', ':.4e', Summary.NONE)
