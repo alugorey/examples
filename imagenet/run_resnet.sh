@@ -36,6 +36,6 @@ export HIP_VISIBLE_DEVICES=0
 
 #python3 main.py -a resnet50 --lr 9.1 --wd 0.0002 --epochs 1 --batch-size 256 -j 32 -p 10 --gpu 0 /home/imagenet
 
-python3 main.py -a resnet50 --print-freq 1 --epochs 1 --gpu 0 /home/imagenet
+python3 main.py --hooks -a resnet50 --print-freq 1 --epochs 1 --gpu 0 /home/imagenet
 
 echo "Done!"

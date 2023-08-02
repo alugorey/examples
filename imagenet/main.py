@@ -79,6 +79,7 @@ parser.add_argument('--multiprocessing-distributed', action='store_true',
                          'fastest way to use PyTorch for either single node or '
                          'multi node data parallel training')
 parser.add_argument('--dummy', action='store_true', help="use fake data to benchmark")
+parser.add_argument('--hooks', action='store_true')
 
 best_acc1 = 0
 
@@ -335,21 +336,21 @@ def main_worker(gpu, ngpus_per_node, args):
     #CREATE A DUMMY HOOK AND TRY TO PASS IT TO THE MODEL IFF THE MODEL IS A MODULE SUBCLASS
     #SYS.EXIT
 
-
-    print("REGISTERING HOOKS")
-    h1 = model.conv1.register_forward_hook(activation_hooks("conv1"))
-    h2 = model.bn1.register_forward_hook(activation_hooks("batchNorm2d"))
-    h3 = model.relu.register_forward_hook(activation_hooks("relu"))
-    h4 = model.maxpool.register_forward_hook(activation_hooks("maxpool"))
-    # register layer 1 sub layers
-    for i in range(3):
-        model.layer1[i].register_forward_hook(activation_hooks("layer 1"))
-    for i in range(4):
-        model.layer2[i].register_forward_hook(activation_hooks("layer 2"))
-    for i in range(6):
-        model.layer3[i].register_forward_hook(activation_hooks("layer 3"))
-    for i in range(3):
-        model.layer4[i].register_forward_hook(activation_hooks("layer 4"))
+    if args.hooks:
+        print("REGISTERING HOOKS")
+        h1 = model.conv1.register_forward_hook(activation_hooks("conv1"))
+        h2 = model.bn1.register_forward_hook(activation_hooks("batchNorm2d"))
+        h3 = model.relu.register_forward_hook(activation_hooks("relu"))
+        h4 = model.maxpool.register_forward_hook(activation_hooks("maxpool"))
+        # register layer 1 sub layers
+        for i in range(3):
+            model.layer1[i].register_forward_hook(activation_hooks("layer 1"))
+        for i in range(4):
+            model.layer2[i].register_forward_hook(activation_hooks("layer 2"))
+        for i in range(6):
+            model.layer3[i].register_forward_hook(activation_hooks("layer 3"))
+        for i in range(3):
+            model.layer4[i].register_forward_hook(activation_hooks("layer 4"))
 
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
