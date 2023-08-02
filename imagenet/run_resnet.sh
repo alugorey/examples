@@ -19,18 +19,19 @@ export HIP_VISIBLE_DEVICES=0
 
 
 # rocBLAS output
-export ROCBLAS_LAYER=0
+#export ROCBLAS_LAYER=2
 
 # rocBLAS numerical checking
-export ROCBLAS_CHECK_NUMERICS=0
+#export ROCBLAS_CHECK_NUMERICS=2
 
 #MIOpen numerical checking
-export MIOPEN_CHECK_NUMERICS=0
+#export MIOPEN_CHECK_NUMERICS=2
 
 #MIOpen logging
-export MIOPEN_ENABLE_LOGGING=1
-export MIOPEN_ENABLE_LOGGING_CMD=1
-export MIOPEN_LOG_LEVEL=6
+#export MIOPEN_ENABLE_LOGGING=1
+#export MIOPEN_ENABLE_LOGGING_MPMT=1
+#export MIOPEN_ENABLE_LOGGING_CMD=1
+#export MIOPEN_LOG_LEVEL=6
 
 
 #python3 main.py -a resnet50 --lr 9.1 --wd 0.0002 --epochs 1 --batch-size 256 -j 32 -p 10 --gpu 0 /home/imagenet

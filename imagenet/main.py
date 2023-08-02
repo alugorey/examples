@@ -6,6 +6,8 @@ import time
 import warnings
 from enum import Enum
 
+import sys
+
 import torch
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
@@ -80,6 +82,60 @@ parser.add_argument('--dummy', action='store_true', help="use fake data to bench
 
 best_acc1 = 0
 
+torch.set_printoptions(profile="full")
+# hooks
+input_activations = {}
+output_activations = {}
+def activation_hooks(name):
+    def forward_hook(module, input, output):
+        print()
+        # TODO ANDY print out the output tensors
+        print("========== BEGIN HOOK ==============")
+        print("INSIDE FORWARD HOOKS")
+        print("name: ", name)
+        print(type(input[0]))
+        print(len(input))
+        print(type(output))
+        print(type(module))
+
+        if(torch.isnan(output).any()):
+            print()
+            print()
+            print("OUTPUT HAS A NAN!!!")
+            print("INPUT: ")
+            print(input[0].size())
+            print()
+            print("OUTPUT: ")
+            print(output.size())
+            print()
+
+        if(torch.isnan(input[0]).any()):
+            print()
+            print("INPUT HAS A NAN!!!")
+            print()
+
+
+        if(torch.isinf(output).any()):
+            print()
+            print("OUTPUT HAS A INF!!!")
+            print()
+
+        if(torch.isinf(input[0]).any()):
+            print()
+            print("INPUT HAS A INF!!!")
+            print()
+
+
+        input_activations[name]  = input[0].detach()
+        # input[0].detach()????
+        output_activations[name] = output.detach()
+        print("========== END HOOK ==============")
+        print()
+
+    return forward_hook
+
+
+
 
 def main():
     args = parser.parse_args()
@@ -143,6 +199,8 @@ def main_worker(gpu, ngpus_per_node, args):
     else:
         print("=> creating model '{}'".format(args.arch))
         model = models.__dict__[args.arch]()
+
+
 
     if not torch.cuda.is_available() and not torch.backends.mps.is_available():
         print('using CPU, this will be slow')
@@ -270,6 +328,29 @@ def main_worker(gpu, ngpus_per_node, args):
         validate(val_loader, model, criterion, args)
         return
 
+
+#    print(isinstance(model, torch.nn.Module))
+#    print(model.layer4[1])
+    #TODO ANDY - GET THE MODEL, PRINT OUT IT'S TYPE
+    #CREATE A DUMMY HOOK AND TRY TO PASS IT TO THE MODEL IFF THE MODEL IS A MODULE SUBCLASS
+    #SYS.EXIT
+
+
+    print("REGISTERING HOOKS")
+    h1 = model.conv1.register_forward_hook(activation_hooks("conv1"))
+    h2 = model.bn1.register_forward_hook(activation_hooks("batchNorm2d"))
+    h3 = model.relu.register_forward_hook(activation_hooks("relu"))
+    h4 = model.maxpool.register_forward_hook(activation_hooks("maxpool"))
+    # register layer 1 sub layers
+    for i in range(3):
+        model.layer1[i].register_forward_hook(activation_hooks("layer 1"))
+    for i in range(4):
+        model.layer2[i].register_forward_hook(activation_hooks("layer 2"))
+    for i in range(6):
+        model.layer3[i].register_forward_hook(activation_hooks("layer 3"))
+    for i in range(3):
+        model.layer4[i].register_forward_hook(activation_hooks("layer 4"))
+
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
             train_sampler.set_epoch(epoch)
@@ -323,7 +404,7 @@ def train(train_loader, model, criterion, optimizer, epoch, device, args):
 
         # compute output
         # add AMP
-        with torch.cuda.amp.autocast():
+        with torch.cuda.amp.autocast(dtype=torch.float16):
             output = model(images)
             loss = criterion(output, target)
 
@@ -338,6 +419,12 @@ def train(train_loader, model, criterion, optimizer, epoch, device, args):
         loss.backward()
         optimizer.step()
 
+
+        # PRINT ACTIVATIONS
+#        print("PRINTING ACTIVATIONS")
+#        print(input_activations)
+
+
         # measure elapsed time
         batch_time.update(time.time() - end)
         end = time.time()
@@ -345,7 +432,7 @@ def train(train_loader, model, criterion, optimizer, epoch, device, args):
         if i % args.print_freq == 0:
             progress.display(i + 1)
 
-        if i == 5:
+        if i == 1:
             print("BREAKING OUT OF MAIN TRAIN LOOP")
             break
 
@@ -366,8 +453,9 @@ def validate(val_loader, model, criterion, args):
                     target = target.cuda(args.gpu, non_blocking=True)
 
                 # compute output
-                output = model(images)
-                loss = criterion(output, target)
+                with torch.cuda.amp.autocast(dtype=torch.float16):
+                    output = model(images)
+                    loss = criterion(output, target)
 
                 # measure accuracy and record loss
                 acc1, acc5 = accuracy(output, target, topk=(1, 5))
@@ -454,7 +542,7 @@ class AverageMeter(object):
             device = torch.device("mps")
         else:
             device = torch.device("cpu")
-        total = torch.tensor([self.sum, self.count], dtype=torch.float32, device=device)
+        total = torch.tensor([self.sum, self.count], dtype=torch.float16, device=device)
         dist.all_reduce(total, dist.ReduceOp.SUM, async_op=False)
         self.sum, self.count = total.tolist()
         self.avg = self.sum / self.count
