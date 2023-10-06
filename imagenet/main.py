@@ -254,6 +254,9 @@ def main_worker(gpu, ngpus_per_node, args):
                                 momentum=args.momentum,
                                 weight_decay=args.weight_decay)
     
+    # ANDY - define loss scaler
+    scaler = torch.cuda.amp.GradScaler()
+
     """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
     scheduler = StepLR(optimizer, step_size=30, gamma=0.1)
     
@@ -288,7 +291,7 @@ def main_worker(gpu, ngpus_per_node, args):
         val_dataset = datasets.FakeData(50000, (3, 224, 224), 1000, transforms.ToTensor())
     else:
         traindir = os.path.join(args.data, 'train')
-        valdir = os.path.join(args.data, 'val')
+        valdir = os.path.join(args.data, 'validation')
         normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                      std=[0.229, 0.224, 0.225])
 
@@ -301,18 +304,18 @@ def main_worker(gpu, ngpus_per_node, args):
                 normalize,
             ]))
 
-        val_dataset = datasets.ImageFolder(
-            valdir,
-            transforms.Compose([
-                transforms.Resize(256),
-                transforms.CenterCrop(224),
-                transforms.ToTensor(),
-                normalize,
-            ]))
+        #val_dataset = datasets.ImageFolder(
+        #    valdir,
+        #    transforms.Compose([
+        #        transforms.Resize(256),
+        #        transforms.CenterCrop(224),
+        #        transforms.ToTensor(),
+        #        normalize,
+        #    ]))
 
     if args.distributed:
         train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
-        val_sampler = torch.utils.data.distributed.DistributedSampler(val_dataset, shuffle=False, drop_last=True)
+        #val_sampler = torch.utils.data.distributed.DistributedSampler(val_dataset, shuffle=False, drop_last=True)
     else:
         train_sampler = None
         val_sampler = None
@@ -321,13 +324,13 @@ def main_worker(gpu, ngpus_per_node, args):
         train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
         num_workers=args.workers, pin_memory=True, sampler=train_sampler)
 
-    val_loader = torch.utils.data.DataLoader(
-        val_dataset, batch_size=args.batch_size, shuffle=False,
-        num_workers=args.workers, pin_memory=True, sampler=val_sampler)
+    #val_loader = torch.utils.data.DataLoader(
+    #    val_dataset, batch_size=args.batch_size, shuffle=False,
+    #    num_workers=args.workers, pin_memory=True, sampler=val_sampler)
 
-    if args.evaluate:
-        validate(val_loader, model, criterion, args)
-        return
+#    if args.evaluate:
+#        validate(val_loader, model, criterion, args)
+#        return
 
 
 #    print(isinstance(model, torch.nn.Module))
@@ -357,16 +360,17 @@ def main_worker(gpu, ngpus_per_node, args):
             train_sampler.set_epoch(epoch)
 
         # train for one epoch
-        train(train_loader, model, criterion, optimizer, epoch, device, args)
+        train(train_loader, model, criterion, optimizer, epoch, device, scaler, args)
 
         # evaluate on validation set
-        acc1 = validate(val_loader, model, criterion, args)
+        #acc1 = validate(val_loader, model, criterion, args)
         
         scheduler.step()
         
         # remember best acc@1 and save checkpoint
-        is_best = acc1 > best_acc1
-        best_acc1 = max(acc1, best_acc1)
+        #is_best = acc1 > best_acc1
+        is_best = True
+        #best_acc1 = max(acc1, best_acc1)
 
         if not args.multiprocessing_distributed or (args.multiprocessing_distributed
                 and args.rank % ngpus_per_node == 0):
@@ -380,7 +384,7 @@ def main_worker(gpu, ngpus_per_node, args):
             }, is_best)
 
 
-def train(train_loader, model, criterion, optimizer, epoch, device, args):
+def train(train_loader, model, criterion, optimizer, epoch, device, scaler, args):
     batch_time = AverageMeter('Time', ':6.3f')
     data_time = AverageMeter('Data', ':6.3f')
     losses = AverageMeter('Loss', ':.4e')
@@ -395,6 +399,9 @@ def train(train_loader, model, criterion, optimizer, epoch, device, args):
     model.train()
 
     end = time.time()
+
+
+
     for i, (images, target) in enumerate(train_loader):
         # measure data loading time
         data_time.update(time.time() - end)
@@ -411,14 +418,16 @@ def train(train_loader, model, criterion, optimizer, epoch, device, args):
 
         # measure accuracy and record loss
         acc1, acc5 = accuracy(output, target, topk=(1, 5))
+
         losses.update(loss.item(), images.size(0))
         top1.update(acc1[0], images.size(0))
         top5.update(acc5[0], images.size(0))
 
         # compute gradient and do SGD step
         optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+        scaler.scale(loss).backward()
+        scaler.step(optimizer)
+        scaler.update()
 
 
         # PRINT ACTIVATIONS
@@ -433,9 +442,9 @@ def train(train_loader, model, criterion, optimizer, epoch, device, args):
         if i % args.print_freq == 0:
             progress.display(i + 1)
 
-        if i == 1:
-            print("BREAKING OUT OF MAIN TRAIN LOOP")
-            break
+        #if i == 20:
+        #    print("BREAKING OUT OF MAIN TRAIN LOOP")
+        #    break
 
 
 def validate(val_loader, model, criterion, args):
