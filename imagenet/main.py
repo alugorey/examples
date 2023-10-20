@@ -90,7 +90,6 @@ output_activations = {}
 def activation_hooks(name):
     def forward_hook(module, input, output):
         print()
-        # TODO ANDY print out the output tensors
         print("========== BEGIN HOOK ==============")
         print("INSIDE FORWARD HOOKS")
         print("name: ", name)
@@ -254,11 +253,11 @@ def main_worker(gpu, ngpus_per_node, args):
                                 momentum=args.momentum,
                                 weight_decay=args.weight_decay)
     
-    # ANDY - define loss scaler
+    # define loss scaler
     scaler = torch.cuda.amp.GradScaler()
 
     """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
-    scheduler = StepLR(optimizer, step_size=30, gamma=0.1)
+    scheduler = StepLR(optimizer, step_size=20, gamma=0.1)
     
     # optionally resume from a checkpoint
     if args.resume:
@@ -333,11 +332,6 @@ def main_worker(gpu, ngpus_per_node, args):
 #        return
 
 
-#    print(isinstance(model, torch.nn.Module))
-#    print(model.layer4[1])
-    #TODO ANDY - GET THE MODEL, PRINT OUT IT'S TYPE
-    #CREATE A DUMMY HOOK AND TRY TO PASS IT TO THE MODEL IFF THE MODEL IS A MODULE SUBCLASS
-    #SYS.EXIT
 
     if args.hooks:
         print("REGISTERING HOOKS")
@@ -442,7 +436,7 @@ def train(train_loader, model, criterion, optimizer, epoch, device, scaler, args
         if i % args.print_freq == 0:
             progress.display(i + 1)
 
-        #if i == 20:
+        #if i == 100:
         #    print("BREAKING OUT OF MAIN TRAIN LOOP")
         #    break
 
